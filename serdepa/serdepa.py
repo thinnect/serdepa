@@ -30,10 +30,13 @@ class SuperSerdepaPacket(type):
 
         if '_fields_' in attrs:
             for field in attrs['_fields_']:
-                if len(field) == 3 and field[2] == "list":
-                    setattr(cls, field[0], [])
+                if len(field) == 2:
+                    if isinstance(field[1], List):
+                        setattr(cls, field[0], [])
+                    else:
+                        add_property(cls, field[0], "")
                 else:
-                    add_property(cls, field[0], "")
+                    raise TypeError("A field needs both a name and a type")
 
             # del attrs['_fields_']
 
@@ -50,3 +53,23 @@ class SerdepaPacket(object):
     def deserialize(self, data):
         # TODO loop over _fields_ and deserialize their values from data
         pass
+
+
+class Length(object):
+
+    def __init__(self, object_type, field_name):
+        self._type = object_type
+        self._field = field_name
+
+
+class List(object):
+
+    def __init__(self, object_type):
+        self._type = object_type
+
+
+class Array(object):
+
+    def __init__(self, object_type, length):
+        self._type = object_type
+        self._length = length

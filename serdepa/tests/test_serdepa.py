@@ -2,7 +2,7 @@
 
 import unittest
 
-from serdepa import SerdepaPacket
+from serdepa import SerdepaPacket, Length, List, Array
 
 from ctypes import c_uint8, c_uint32, c_int32
 
@@ -22,9 +22,9 @@ class OnePacket(SerdepaPacket):
     _fields_ = [
         ("header", c_uint8),
         ("timestamp", c_uint32),
-        ("length", c_uint8, "len(data)"),
-        ("data", c_uint8, "list"),
-        ("tail", c_uint8, "list")
+        ("length", Length(c_uint8, "data")),
+        ("data", List(c_uint8)),
+        ("tail", List(c_uint8))
     ]
 
 
@@ -33,14 +33,15 @@ class AnotherPacket(SerdepaPacket):
         ("header", c_uint8),
         ("timestamp", c_uint32),
         ("origin", PointStruct),
-        ("points", c_uint8, "len(data)"),
-        ("data", PointStruct, "list")
+        ("points", Length(c_uint8, "data")),
+        ("data", List(PointStruct))
     ]
+
 
 class ArrayPacket(SerdepaPacket):
     _fields_ = [
         ("header", c_uint8),
-        ("data", PointStruct, "array(4)")
+        ("data", Array(PointStruct, 4))
     ]
 
 
