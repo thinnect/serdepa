@@ -58,11 +58,11 @@ class TransformTester(unittest.TestCase):
         p.tail.append(5)
         p.tail.append(6)
 
-        self.assertEqual(p.serialize(), self.p1)
+        self.assertEqual(p.serialize(), self.p1.decode("hex"))
 
     def test_two(self):
         p = OnePacket()
-        p.deserialize(self.p1)
+        p.deserialize(self.p1.decode("hex"))
 
         self.assertEqual(p.header, 1)
         self.assertEqual(p.timestamp, 12345)
