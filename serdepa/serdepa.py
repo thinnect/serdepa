@@ -1,50 +1,49 @@
 """serdepa.py: Binary packet serialization and deserialization library. """
 
-__author__ = "Raido Pahtma, ..."
-__license__ = "MIT"
-
-
 import StringIO
-import numbers
 import struct
 import collections
 import warnings
 import copy
 
 
-# TODO probably should define custom types to represent different variable types
-# ... or maybe use ctypes types like in the initial tests ...?
+__author__ = "Raido Pahtma, Kaarel Ratas"
+__license__ = "MIT"
+
 
 def add_property(cls, attr, attr_type):
     if hasattr(cls, attr):
-#        print "NOT adding property %s to %s" % (attr, cls)  # In the final version this should probably raise an exception once metaclasses are handled properly
+        # print "NOT adding property %s to %s" % (attr, cls)
+        # In the final version this should probably raise an exception once everything is handled properly
         pass
     else:
-#        print "adding property %s to %s" % (attr, cls)
+        # print "adding property %s to %s" % (attr, cls)
 
         if isinstance(attr_type, BaseIterable):
             setter = None
+
             def getter(self):
                 return getattr(self, '_%s' % attr)
 
         elif isinstance(attr_type, Length):
             setter = None
+
             def getter(self):
                 return len(getattr(
                     self,
-                    '_field_regitry'
+                    '_field_regitry'  # TODO is this intended to be called regitry and not registry?
                 )[getattr(self, '_depends')[attr]])
 
         else:
             def setter(self, v):
-#                print "setter for %s" % (attr)  # TODO remove this debug
+                # print "setter for %s" % (attr)
                 setattr(getattr(self, '_%s' % attr), "value", v)
 
             def getter(self):
                 return getattr(self, '_%s' % attr).value
 
         setattr(cls, attr, property(getter, setter))
-#        print(dir(cls))
+        # print(dir(cls))
 
 
 class SuperSerdepaPacket(type):
@@ -71,8 +70,6 @@ class SuperSerdepaPacket(type):
                 else:
                     raise TypeError("A field needs both a name and a type")
 
-            # del attrs['_fields_']
-
         super(SuperSerdepaPacket, cls).__init__(what, bases, attrs)
 
 
@@ -80,7 +77,7 @@ class SerdepaPacket(object):
     __metaclass__ = SuperSerdepaPacket
 
     def __init__(self, **kwargs):
-        self._field_regitry = collections.OrderedDict()
+        self._field_registry = collections.OrderedDict()
 #        for field in kwargs:
 #            if field not in self._field_regitry:
 #                raise TypeError("Field {field} not in {cls}.".format(
@@ -89,19 +86,18 @@ class SerdepaPacket(object):
 #                ))
         for name, _type in self._fields.iteritems():
             if name in kwargs:
-                self._field_regitry[name] = _type(initial=copy.copy(kwargs[name]))
+                self._field_registry[name] = _type(initial=copy.copy(kwargs[name]))
             else:
-                self._field_regitry[name] = _type()
-            setattr(self, '_%s' % name, self._field_regitry[name])
-
+                self._field_registry[name] = _type()
+            setattr(self, '_%s' % name, self._field_registry[name])
 
     def serialize(self):
         # TODO loop over _fields_ and serialize them
         serialized = StringIO.StringIO()
-        for name, field in self._field_regitry.iteritems():
+        for name, field in self._field_registry.iteritems():
             if name in self._depends:
                 serialized.write(
-                    field.serialize(self._field_regitry[self._depends[name]].length)
+                    field.serialize(self._field_registry[self._depends[name]].length)
                 )
             else:
                 serialized.write(field.serialize())
@@ -111,7 +107,7 @@ class SerdepaPacket(object):
 
     def deserialize(self, data, pos=0):
         # TODO loop over _fields_ and deserialize their values from data
-        for name, field in self._field_regitry.iteritems():
+        for name, field in self._field_registry.iteritems():
             if pos == len(data):
                 raise AttributeError("Invalid length of data to deserialize.")
             try:
@@ -120,7 +116,7 @@ class SerdepaPacket(object):
                 length = 0
                 for key, value in self._depends.iteritems():
                     if name == value:
-                        pos = field.deserialize(data, pos, self._field_regitry[key]._type.value)
+                        pos = field.deserialize(data, pos, self._field_registry[key]._type.value)
                         break
                 else:
                     pos = field.deserialize(data, pos, -1)
@@ -153,6 +149,7 @@ class BaseField(object):
 class BaseIterable(BaseField, list):
 
     def __init__(self, initial=[]):
+        super(BaseIterable, self).__init__()
         for value in initial:
             self.append(self._type(initial=copy.copy(value)))
 
@@ -188,12 +185,9 @@ class BaseIterable(BaseField, list):
 
 class BaseInt(BaseField):
     """
-    Base class for all integer types. Has the fields of
-    _length (in bits), _endianness ("B" for big, "L" for little)
-    and _signed (bool).
+    Base class for all integer types. Has _signed (bool) and _format (struct format string).
     """
 
-    _endianness = None
     _length = None
     _signed = None
     _format = ""
@@ -255,7 +249,7 @@ class Length(BaseField):
     def serialized_size(self):
         return self._type.serialized_size()
 
-    def serialize(self, length):
+    def serialize(self, length):  # TODO PyCharm does not like this approach, method signatures don't match
         self._type.value = length
         return self._type.serialize()
 
@@ -276,15 +270,6 @@ class List(BaseIterable):
     def length(self):
         return len(self)
 
-#    @length.setter
-#    def length(self, value):
-#        if isinstance(value, Length):
-#            self._length_field = value
-#        else:
-#            raise TypeError("The length attribute must be of type serdepa.Length, not {}".format(
-#                type(value)
-#            ))
-
     def serialized_size(self):
         return self._type.serialized_size() * self.length
 
@@ -300,9 +285,6 @@ class List(BaseIterable):
                 self.append(0)
             return super(List, self).deserialize(value, pos)
 
-#    @property
-#    def value(self):
-#        return self._list
 
 class Array(BaseIterable):
     """
@@ -326,7 +308,7 @@ class Array(BaseIterable):
         if dl < 0:
             warnings.warn(RuntimeWarning("The number of items in the Array exceeds the length of the array."))
         elif dl > 0:
-            self += [self._type() for i in xrange(dl)]
+            self += [self._type() for _ in xrange(dl)]  # TODO is this correct???
         ret = super(Array, self).serialize()
         for i in xrange(dl):
             self.pop(-1)
@@ -341,110 +323,94 @@ class Array(BaseIterable):
 class nx_uint8(BaseInt):
     _signed = False
     _length = 8
-    _endianness = "B"
     _format = ">B"
 
 
 class nx_int8(BaseInt):
     _signed = True
     _length = 8
-    _endianness = "B"
     _format = ">b"
 
 
 class uint8(BaseInt):
     _signed = False
     _length = 8
-    _endianness = "L"
     _format = "<B"
 
 
 class int8(BaseInt):
     _signed = True
     _length = 8
-    _endianness = "L"
     _format = "<b"
 
 
 class nx_uint16(BaseInt):
     _signed = False
     _length = 16
-    _endianness = "B"
     _format = ">H"
 
 
 class nx_int16(BaseInt):
     _signed = True
     _length = 16
-    _endianness = "B"
     _format = ">h"
 
 
 class uint16(BaseInt):
     _signed = False
     _length = 16
-    _endianness = "L"
     _format = "<H"
 
 
 class int16(BaseInt):
     _signed = True
     _length = 16
-    _endianness = "L"
     _format = "<h"
 
 
 class nx_uint32(BaseInt):
     _signed = False
     _length = 32
-    _endianness = "B"
     _format = ">I"
 
 
 class nx_int32(BaseInt):
     _signed = True
     _length = 32
-    _endianness = "B"
     _format = ">i"
 
 
 class uint32(BaseInt):
     _signed = False
     _length = 32
-    _endianness = "L"
     _format = "<I"
 
 
 class int32(BaseInt):
     _signed = True
     _length = 32
-    _endianness = "L"
     _format = "<i"
 
 
 class nx_uint64(BaseInt):
     _signed = False
     _length = 64
-    _endianness = "B"
     _format = ">L"
 
 
 class nx_int64(BaseInt):
     _signed = True
     _length = 64
-    _endianness = "B"
     _format = ">l"
 
 
 class uint64(BaseInt):
     _signed = False
     _length = 64
-    _endianness = "L"
     _format = "<L"
 
 
 class int64(BaseInt):
     _signed = True
     _length = 64
-    _endianness = "L"
     _format = "<l"

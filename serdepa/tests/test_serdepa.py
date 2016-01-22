@@ -8,7 +8,7 @@ from serdepa import SerdepaPacket, Length, List, Array, \
         uint8, uint16, uint32, uint64
 
 
-__author__ = "Raido Pahtma, Kaarel Ratas, ..."
+__author__ = "Raido Pahtma, Kaarel Ratas"
 __license__ = "MIT"
 
 
@@ -44,6 +44,7 @@ class ArrayPacket(SerdepaPacket):
         ("header", nx_uint8),
         ("data", Array(PointStruct, 4))
     ]
+
 
 class SimpleArray(SerdepaPacket):
     _fields_ = [
