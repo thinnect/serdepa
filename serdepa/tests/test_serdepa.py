@@ -29,6 +29,16 @@ class OnePacket(SerdepaPacket):
     ]
 
 
+class DefaultValuePacket(SerdepaPacket):
+    _fields_ = [
+        ("header", nx_uint8, 1),
+        ("timestamp", nx_uint32, 12345),
+        ("length", Length(nx_uint8, "data")),
+        ("data", List(nx_uint8), [1, 2, 3, 4]),
+        ("tail", List(nx_uint8), [5, 6])
+    ]
+
+
 class AnotherPacket(SerdepaPacket):
     _fields_ = [
         ("header", nx_uint8),
@@ -115,6 +125,43 @@ class TransformTester(unittest.TestCase):
         self.assertEqual(list(p.tail), [5, 6])
 
 
+class EmptyTailTester(unittest.TestCase):
+    p1 = "01000030390401020304"
+
+    def test_empty_tail_deserialize(self):
+        p = OnePacket()
+        p.deserialize(self.p1.decode("hex"))
+
+        self.assertEqual(p.header, 1)
+        self.assertEqual(p.timestamp, 12345)
+        self.assertEqual(p.length, 4)
+        self.assertEqual(list(p.data), [1, 2, 3, 4])
+        self.assertEqual(list(p.tail), [])
+
+    def test_empty_tail_serialize(self):
+        p = OnePacket()
+        p.header = 1
+        p.timestamp = 12345
+        p.data.append(1)
+        p.data.append(2)
+        p.data.append(3)
+        p.data.append(4)
+
+        self.assertEqual(p.serialize(), self.p1.decode("hex"))
+
+class DefaultValueTester(unittest.TestCase):
+    p1 = "010000303904010203040506"
+    p2 = "020000303904010203040506"
+
+    def test_default_value_serialize(self):
+        p = DefaultValuePacket()
+        self.assertEqual(p.serialize(), self.p1.decode("hex"))
+
+    def test_default_keyword(self):
+        p = DefaultValuePacket(header=2)
+        self.assertEqual(p.serialize(), self.p2.decode("hex"))
+
+
 class ArrayTester(unittest.TestCase):
     a1 = "00010203040506070809"
     a2 = "000000000100000002000000030000000400000005000000060000000000000000"
@@ -153,6 +200,33 @@ class TestHourlyReport(unittest.TestCase):
 
         self.assertEqual(r.nodes_in_beat, 7)
         self.assertEqual(r.beats_in_cycle, 13)
+
+class StringTester(unittest.TestCase):
+    report = "1DD26640070D0005029E022B0139FFFF0003029E010EFFFF3D0300000000FFFF000000000000FFFF000000000000FFFF000000000000FFFF000000000000FFFF000000000000000000000000000000000201AB029E01AB000000150000030296029E02350000001500000000000000000000000000000000000000000000000000000000000000000000000000000000000701FA022B022D00FF381300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+
+    def test_str(self):
+        r = BeatRecord()
+        r.deserialize(self.report.decode("hex"))
+
+        self.assertEqual(self.report, str(r))
+
+
+class SerializedSizeTester(unittest.TestCase):
+    def test_minimal_serialized_size(self):
+        self.assertEqual(OnePacket.minimal_size(), 6)
+        self.assertEqual(BeatRecord.minimal_size(), 10)
+
+    def test_serialized_size(self):
+        p = OnePacket()
+        p.header = 1
+        p.timestamp = 12345
+        p.data.append(1)
+        p.data.append(2)
+        p.data.append(3)
+        p.data.append(4)
+        p.tail.append(5)
+        p.tail.append(6)
+        self.assertEqual(p.serialized_size(), 12)
 
 if __name__ == '__main__':
     unittest.main()

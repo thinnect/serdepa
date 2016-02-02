@@ -5,6 +5,7 @@ import struct
 import collections
 import warnings
 import copy
+import math
 
 
 __author__ = "Raido Pahtma, Kaarel Ratas"
@@ -17,7 +18,6 @@ def add_property(cls, attr, attr_type):
         # In the final version this should probably raise an exception once everything is handled properly
         pass
     else:
-        # print "adding property %s to %s" % (attr, cls)
 
         if isinstance(attr_type, BaseIterable):
             setter = None
@@ -31,34 +31,42 @@ def add_property(cls, attr, attr_type):
             def getter(self):
                 return len(getattr(
                     self,
-                    '_field_regitry'  # TODO is this intended to be called regitry and not registry?
+                    '_field_registry'
                 )[getattr(self, '_depends')[attr]])
 
         else:
             def setter(self, v):
-                # print "setter for %s" % (attr)
                 setattr(getattr(self, '_%s' % attr), "value", v)
 
             def getter(self):
                 return getattr(self, '_%s' % attr).value
 
         setattr(cls, attr, property(getter, setter))
-        # print(dir(cls))
 
 
 class SuperSerdepaPacket(type):
+    """
+    Metaclass of the SerdepaPacket object. Essentially does the following:
+        Reads the _fields_ attribute of the class and for each 2- or 3-tuple entry
+        sets up the properties of the class to the right names. Also checks that each
+        (non-last) List instance has a Length field associated with it.
+    """
 
     def __init__(cls, what, bases=None, attrs=None):
-        print "SuperTransformPacket cls:%s what:%s bases:%s attrs:%s" % (cls, what, bases, attrs)  # TODO remove
 
-        # TODO only allow the last member to be of unknown length
         setattr(cls, "_fields", collections.OrderedDict())
         setattr(cls, "_depends", dict())
         if '_fields_' in attrs:
             for field in attrs['_fields_']:
-                if len(field) == 2:
+                if len(field) == 2 or len(field) == 3:
+                    if len(field) == 2:
+                        default = None
+                    elif isinstance(field[1], Length):
+                        raise TypeError("A Length field can't have a default value: {}".format(field))
+                    else:
+                        default = field[2]
                     add_property(cls, field[0], field[1])
-                    getattr(cls, "_fields")[field[0]] = field[1]
+                    getattr(cls, "_fields")[field[0]] = [field[1], default]
                     if isinstance(field[1], Length):
                         getattr(cls, "_depends")[field[0]] = field[1]._field
                     elif isinstance(field[1], List):
@@ -68,25 +76,39 @@ class SuperSerdepaPacket(type):
                                 type(field[1])
                             ))
                 else:
-                    raise TypeError("A field needs both a name and a type")
+                    raise TypeError("A field needs both a name and a type: {}".format(field))
 
         super(SuperSerdepaPacket, cls).__init__(what, bases, attrs)
 
 
 class SerdepaPacket(object):
+    """
+    The superclass for any packets. Defining a subclass works as such:
+        class Packet(SerdepaPacket):
+            _fields_ = [
+                ("name", type[, default]),
+                ("name", type[, default]),
+                ...
+            ]
+
+    Has the following public methods:
+    .serialize() -> bytearray
+    .deserialize(bytearray)
+
+    and the class method
+    .minimal_size() -> int
+    """
+
+
     __metaclass__ = SuperSerdepaPacket
 
     def __init__(self, **kwargs):
         self._field_registry = collections.OrderedDict()
-#        for field in kwargs:
-#            if field not in self._field_regitry:
-#                raise TypeError("Field {field} not in {cls}.".format(
-#                    field=field,
-#                    cls=self.__class__.__name__
-#                ))
-        for name, _type in self._fields.iteritems():
+        for name, (_type, default) in self._fields.iteritems():
             if name in kwargs:
                 self._field_registry[name] = _type(initial=copy.copy(kwargs[name]))
+            elif default:
+                self._field_registry[name] = _type(initial=copy.copy(default))
             else:
                 self._field_registry[name] = _type()
             setattr(self, '_%s' % name, self._field_registry[name])
@@ -107,9 +129,12 @@ class SerdepaPacket(object):
 
     def deserialize(self, data, pos=0):
         # TODO loop over _fields_ and deserialize their values from data
-        for name, field in self._field_registry.iteritems():
-            if pos == len(data):
-                raise AttributeError("Invalid length of data to deserialize.")
+        for i, (name, field) in enumerate(self._field_registry.iteritems()):
+            if pos >= len(data):
+                if i == len(self._field_registry) - 1 and isinstance(field, List):
+                    return pos
+                else:
+                    raise AttributeError("Invalid length of data to deserialize.")
             try:
                 pos = field.deserialize(data, pos)
             except IOError:
@@ -127,6 +152,22 @@ class SerdepaPacket(object):
 #                warnings.warn(RuntimeWarning("Data longer than available fields"))
         return pos
 
+    def serialized_size(self):
+        size = 0
+        for name, field in self._field_registry.iteritems():
+            size += field.serialized_size()
+        return size
+
+    @classmethod
+    def minimal_size(cls):
+        size = 0
+        for name, (_type, default) in cls._fields.iteritems():
+            size += _type.minimal_size()
+        return size
+
+    def __str__(self):
+        return self.serialize().encode("hex").upper()
+
 
 class BaseField(object):
 
@@ -143,6 +184,10 @@ class BaseField(object):
         return bytearray([])
 
     def deserialize(self, value, pos):
+        return NotImplemented
+
+    @classmethod
+    def minimal_size(cls):
         return NotImplemented
 
 
@@ -213,13 +258,14 @@ class BaseInt(BaseField):
         self._value = struct.unpack(self._format, value[pos:pos+self.serialized_size()])[0]
         return pos + self.serialized_size()
 
-    def serialized_size(self):
+    @classmethod
+    def serialized_size(cls):
         """
         Returns the length of this field in bytes. If the length in bits is not directly
         divisible by 8, an extra byte is added.
         """
 
-        return self._length // 8 + bool(self._length % 8)
+        return int(math.ceil(cls._length/8.0))
 
     def __getattribute__(self, attr):
         if attr in ["__lt__", "__le__", "__eq__", "__ne__", "__gt__", "__ge__",
@@ -235,6 +281,10 @@ class BaseInt(BaseField):
 
     def __repr__(self):
         return "{} with value {}".format(self.__class__, self._value)
+
+    @classmethod
+    def minimal_size(cls):
+        return int(math.ceil(cls._length/8.0))
 
 
 class Length(BaseField):
@@ -255,6 +305,9 @@ class Length(BaseField):
 
     def deserialize(self, value, pos):
         return self._type.deserialize(value, pos)
+
+    def minimal_size(self):
+        return self.serialized_size()
 
 
 class List(BaseIterable):
@@ -284,6 +337,9 @@ class List(BaseIterable):
             for i in xrange(len(self), length):
                 self.append(0)
             return super(List, self).deserialize(value, pos)
+
+    def minimal_size(cls):
+        return 0
 
 
 class Array(BaseIterable):
@@ -319,6 +375,8 @@ class Array(BaseIterable):
             self.append(self._type())
         return super(Array, self).deserialize(value, pos)
 
+    def minimal_size(self):
+        return self.serialized_size()
 
 class nx_uint8(BaseInt):
     _signed = False
