@@ -168,6 +168,9 @@ class SerdepaPacket(object):
     def __str__(self):
         return self.serialize().encode("hex").upper()
 
+    def __eq__(self, other):
+        return str(self) == str(other)
+
 
 class BaseField(object):
 
@@ -225,7 +228,10 @@ class BaseIterable(BaseField, list):
 
     def __iter__(self):
         for i in xrange(len(self)):
-            yield self[i].value
+            try:
+                yield self[i].value
+            except AttributeError:
+                yield self[i]
 
 
 class BaseInt(BaseField):

@@ -228,5 +228,31 @@ class SerializedSizeTester(unittest.TestCase):
         p.tail.append(6)
         self.assertEqual(p.serialized_size(), 12)
 
+
+class NestedPacketTester(unittest.TestCase):
+    p = "F10000000000000003000000010000000200000002000000010000000300000000"
+
+    def test_nested_packet_serialize(self):
+        packet = ArrayPacket()
+        packet.header = 0xF1
+        for i, j in zip(xrange(4), reversed(xrange(4))):
+            packet.data.append(PointStruct(x=i, y=j))
+        self.assertEqual(packet.serialize(), self.p.decode("hex"))
+
+    def test_nested_packet_deserialize(self):
+        packet = ArrayPacket()
+        packet.deserialize(self.p.decode("hex"))
+        self.assertEqual(packet.header, 0xF1)
+        self.assertEqual(
+            list(packet.data),
+            [
+                PointStruct(x=0, y=3),
+                PointStruct(x=1, y=2),
+                PointStruct(x=2, y=1),
+                PointStruct(x=3, y=0)
+            ]
+        )
+
+
 if __name__ == '__main__':
     unittest.main()
