@@ -93,7 +93,7 @@ class SerdepaPacket(object):
 
     Has the following public methods:
     .serialize() -> bytearray
-    .deserialize(bytearray)
+    .deserialize(bytearray)         raises ValueError on bad input
 
     and the class method
     .minimal_size() -> int
@@ -114,7 +114,6 @@ class SerdepaPacket(object):
             setattr(self, '_%s' % name, self._field_registry[name])
 
     def serialize(self):
-        # TODO loop over _fields_ and serialize them
         serialized = StringIO.StringIO()
         for name, field in self._field_registry.iteritems():
             if name in self._depends:
@@ -128,17 +127,15 @@ class SerdepaPacket(object):
         return ret
 
     def deserialize(self, data, pos=0):
-        # TODO loop over _fields_ and deserialize their values from data
         for i, (name, field) in enumerate(self._field_registry.iteritems()):
             if pos >= len(data):
                 if i == len(self._field_registry) - 1 and isinstance(field, List):
                     return pos
                 else:
-                    raise AttributeError("Invalid length of data to deserialize.")
+                    raise ValueError("Invalid length of data to deserialize.")
             try:
                 pos = field.deserialize(data, pos)
-            except IOError:
-                length = 0
+            except AttributeError:
                 for key, value in self._depends.iteritems():
                     if name == value:
                         pos = field.deserialize(data, pos, self._field_registry[key]._type.value)
@@ -146,10 +143,7 @@ class SerdepaPacket(object):
                 else:
                     pos = field.deserialize(data, pos, -1)
             if pos > len(data):
-                raise AttributeError("Invalid length of data to deserialize.")
-#        else:
-#            if pos != len(data):
-#                warnings.warn(RuntimeWarning("Data longer than available fields"))
+                raise ValueError("Invalid length of data to deserialize.")
         return pos
 
     def serialized_size(self):
@@ -261,7 +255,10 @@ class BaseInt(BaseField):
         return struct.pack(self._format, self._value)
 
     def deserialize(self, value, pos):
-        self._value = struct.unpack(self._format, value[pos:pos+self.serialized_size()])[0]
+        try:
+            self._value = struct.unpack(self._format, value[pos:pos+self.serialized_size()])[0]
+        except struct.error as e:
+            raise ValueError("Invalid length of data!", e)
         return pos + self.serialized_size()
 
     @classmethod
@@ -334,7 +331,7 @@ class List(BaseIterable):
 
     def deserialize(self, value, pos, length=None):
         if length is None:
-            raise IOError("Unknown length.")
+            raise AttributeError("Unknown length.")
         elif length == -1:
             for i in xrange(len(self), (len(value)-pos)/self._type().serialized_size()):
                 self.append(0)
