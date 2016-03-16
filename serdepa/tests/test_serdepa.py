@@ -5,7 +5,7 @@ import unittest
 from serdepa import SerdepaPacket, Length, List, Array, \
         nx_uint8, nx_uint16, nx_uint32, nx_uint64, \
         nx_int8, nx_int16, nx_int32, nx_int64, \
-        uint8, uint16, uint32, uint64
+        uint8, uint16, uint32, uint64, ByteString
 
 
 __author__ = "Raido Pahtma, Kaarel Ratas"
@@ -263,6 +263,54 @@ class InvalidInputTester(unittest.TestCase):
         r = BeatRecord()
         with self.assertRaises(ValueError):
             r.deserialize(self.p.decode("hex"))
+
+
+class ByteStringTester(unittest.TestCase):
+    p1 = 'F10E323511122213541513A2D21F161C3621B8'
+    p2 = '0305E8F02398A9'
+
+    def test_variable_length_bytestring(self):
+        class VarLenPacket(SerdepaPacket):
+            _fields_ = (
+                ("hdr", nx_uint16),
+                ("tail", ByteString())
+            )
+        packet = VarLenPacket()
+        try:
+            packet.deserialize(self.p1.decode("hex"))
+        except ValueError as e:
+            self.fail("Variable length ByteString deserializing failed with message: {}".format(e))
+        self.assertTrue(isinstance(packet.tail, ByteString))
+        self.assertEqual(packet.hdr, 0xF10E)
+        self.assertEqual(packet.tail, 0x323511122213541513A2D21F161C3621B8)
+        self.assertEqual(packet.serialize(), self.p1.decode("hex"))
+
+    def test_fixed_length_bytestring(self):
+        class FixLenPacket(SerdepaPacket):
+            _fields_ = (
+                ('hdr', nx_uint8),
+                ('tail', ByteString(6))
+            )
+        packet = FixLenPacket()
+        packet.deserialize(self.p2.decode("hex"))
+        self.assertEqual(packet.hdr, 0x03)
+        self.assertEqual(packet.tail, 0x05E8F02398A9)
+        self.assertEqual(packet.serialize(), self.p2.decode("hex"))
+
+    def test_length_object_defined_length_bytestring(self):
+        class LenObjLenPacket(SerdepaPacket):
+            _fields_ = (
+                ('hdr', nx_uint8),
+                ('length', Length(nx_uint8, 'tail')),
+                ('tail', ByteString())
+            )
+        packet = LenObjLenPacket()
+        packet.deserialize(self.p2.decode("hex"))
+        self.assertEqual(packet.hdr, 0x03)
+        self.assertEqual(packet.length, 5)
+        self.assertEqual(packet.tail, 0xE8F02398A9)
+        self.assertEqual(str(packet.tail), 'E8F02398A9')
+
 
 if __name__ == '__main__':
     unittest.main()

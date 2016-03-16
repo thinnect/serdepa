@@ -19,7 +19,7 @@ def add_property(cls, attr, attr_type):
         pass
     else:
 
-        if isinstance(attr_type, BaseIterable):
+        if isinstance(attr_type, BaseIterable) or isinstance(attr_type, ByteString):
             setter = None
 
             def getter(self):
@@ -69,7 +69,7 @@ class SuperSerdepaPacket(type):
                     getattr(cls, "_fields")[field[0]] = [field[1], default]
                     if isinstance(field[1], Length):
                         getattr(cls, "_depends")[field[0]] = field[1]._field
-                    elif isinstance(field[1], List):
+                    elif isinstance(field[1], List) or isinstance(field[1], ByteString):
                         if not (field[0] in getattr(cls, "_depends").values() or field == attrs['_fields_'][-1]):
                             raise TypeError("Only the last field can have an undefined length ({} of type {})".format(
                                 field[0],
@@ -129,7 +129,7 @@ class SerdepaPacket(object):
     def deserialize(self, data, pos=0):
         for i, (name, field) in enumerate(self._field_registry.iteritems()):
             if pos >= len(data):
-                if i == len(self._field_registry) - 1 and isinstance(field, List):
+                if i == len(self._field_registry) - 1 and (isinstance(field, List) or isinstance(field, ByteString)):
                     return pos
                 else:
                     raise ValueError("Invalid length of data to deserialize.")
@@ -143,7 +143,7 @@ class SerdepaPacket(object):
                 else:
                     pos = field.deserialize(data, pos, -1)
             if pos > len(data):
-                raise ValueError("Invalid length of data to deserialize.")
+                raise ValueError("Invalid length of data to deserialize. {}, {}".format(pos, len(data)))
         return pos
 
     def serialized_size(self):
@@ -181,11 +181,11 @@ class BaseField(object):
         return bytearray([])
 
     def deserialize(self, value, pos):
-        return NotImplemented
+        raise NotImplementedError()
 
     @classmethod
     def minimal_size(cls):
-        return NotImplemented
+        raise NotImplementedError()
 
 
 class BaseIterable(BaseField, list):
@@ -380,6 +380,63 @@ class Array(BaseIterable):
 
     def minimal_size(self):
         return self.serialized_size()
+
+
+class ByteString(BaseField):
+    """
+    A variable or fixed-length string of bytes.
+    """
+
+    def __init__(self, length=None, **kwargs):
+        if length is not None:
+            self._data_container = Array(nx_uint8, length)
+        else:
+            self._data_container = List(nx_uint8)
+        super(ByteString, self).__init__(**kwargs)
+
+    def __getattr__(self, attr):
+        if attr not in ['_data_container']:
+            return getattr(self._data_container, attr)
+        else:
+            return super(ByteString, self).__getattribute__(attr)
+
+    def __setattr__(self, attr, value):
+        if attr not in ['_data_container', '_value']:
+            setattr(self._data_container, attr, value)
+        else:
+            super(ByteString, self).__setattr__(attr, value)
+
+    @property
+    def _value(self):
+        return reduce(
+            lambda x, (i, y): x + (y << (8*i)),
+            enumerate(
+                reversed(list(self._data_container))
+            ),
+            0
+        )
+
+    def deserialize(self, *args, **kwargs):
+        return self._data_container.deserialize(*args, **kwargs)
+
+    def serialize(self, *args, **kwargs):
+        return self._data_container.serialize(*args, **kwargs)
+
+    def __eq__(self, other):
+        return self._value == other
+
+    def __repr__(self):
+        return "{} with value {}".format(self.__class__, self._value)
+
+    def __str__(self):
+        return "{value:0{size}X}".format(
+            value=self._value,
+            size=self._data_container.serialized_size()*2,
+        )
+
+    def __len__(self):
+        return len(self._data_container)
+
 
 class nx_uint8(BaseInt):
     _signed = False
