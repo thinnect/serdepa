@@ -332,12 +332,13 @@ class List(BaseIterable):
     def deserialize(self, value, pos, length=None):
         if length is None:
             raise AttributeError("Unknown length.")
-        del self[:]     # clear the internal list - deserialization will overwrite anyway.
         elif length == -1:
+            del self[:]     # clear the internal list - deserialization will overwrite anyway.
             for i in xrange(len(self), (len(value)-pos)/self._type().serialized_size()):
                 self.append(0)
             return super(List, self).deserialize(value, pos)
         else:
+            del self[:]     # clear the internal list - deserialization will overwrite anyway.
             for i in xrange(len(self), length):
                 self.append(0)
             return super(List, self).deserialize(value, pos)
