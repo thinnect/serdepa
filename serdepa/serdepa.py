@@ -7,10 +7,10 @@ import warnings
 import copy
 import math
 
-
 __author__ = "Raido Pahtma, Kaarel Ratas"
 __license__ = "MIT"
 
+version = '0.2.3'
 
 def add_property(cls, attr, attr_type):
     if hasattr(cls, attr):
@@ -41,6 +41,7 @@ def add_property(cls, attr, attr_type):
             def setter(self, v):
                 if isinstance(v, self._fields[attr][0]):
                    setattr(self, '_%s' % attr, v)
+                   self._field_registry[attr] = v
                 else:
                     raise ValueError(
                         "Cannot assign a value of type {} "
