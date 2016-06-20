@@ -327,6 +327,14 @@ class NestedPacketTester(unittest.TestCase):
         with self.assertRaises(ValueError):
             packet.origin = AnotherPacket()
 
+    def test_nested_packet_assign_serialize(self):
+        packet = AnotherPacket()
+        packet.header = 0xD0
+        packet.timestamp = 0x12345678
+        packet.origin = PointStruct(x=1, y=1)
+        packet.data.append(PointStruct(x=2, y=2))
+        self.assertEqual(packet.serialize().encode("hex").upper(), self.p1)
+
 
 class InvalidInputTester(unittest.TestCase):
     p = "1DD26640070D0005029E022B0139FFFF0003029E010EFFFF3D0300000000FFFF000000000000FFFF000000000000FFFF000000000000FFFF000000000000FFFF000000000000000000000000000000000201AB029E01AB000000150000030296029E02350000001500000000000000000000000000000000000000000000000000000000000000000000000000000000000701FA0F"
