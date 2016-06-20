@@ -204,7 +204,32 @@ class TestHourlyReport(unittest.TestCase):
 
 
 class StringTester(unittest.TestCase):
-    report = "1DD26640070D0005029E022B0139FFFF0003029E010EFFFF3D0300000000FFFF000000000000FFFF000000000000FFFF000000000000FFFF000000000000FFFF000000000000000000000000000000000201AB029E01AB000000150000030296029E02350000001500000000000000000000000000000000000000000000000000000000000000000000000000000000000701FA022B022D00FF381300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+    report = (
+        "1DD26640"
+        "07"
+        "0D"
+        "0005029E"
+        "022B0139FFFF0003"
+        "029E010EFFFF3D03"
+        "00000000FFFF0000"
+        "00000000FFFF0000"
+        "00000000FFFF0000"
+        "00000000FFFF0000"
+        "00000000FFFF0000"
+        "00000000000000000000000000"
+        "000201AB029E01AB0000001500"
+        "00030296029E02350000001500"
+        "00000000000000000000000000"
+        "00000000000000000000000000"
+        "00000000000000000000000000"
+        "000701FA022B022D00FF381300"
+        "00000000000000000000000000"
+        "00000000000000000000000000"
+        "00000000000000000000000000"
+        "00000000000000000000000000"
+        "00000000000000000000000000"
+        "00000000000000000000000000"
+    )
 
     def test_str(self):
         r = BeatRecord()
@@ -232,18 +257,40 @@ class SerializedSizeTester(unittest.TestCase):
 
 
 class NestedPacketTester(unittest.TestCase):
-    p = "F10000000000000003000000010000000200000002000000010000000300000000"
+    p0 = (
+        "F1"
+        "0000000000000003"
+        "0000000100000002"
+        "0000000200000001"
+        "0000000300000000"
+    )
+    p1 = (
+        "D0"
+        "12345678"
+        "0000000100000001"
+        "01"
+        "0000000200000002"
+    )
 
     def test_nested_packet_serialize(self):
         packet = ArrayPacket()
         packet.header = 0xF1
         for i, j in zip(xrange(4), reversed(xrange(4))):
             packet.data.append(PointStruct(x=i, y=j))
-        self.assertEqual(packet.serialize(), self.p.decode("hex"))
+        self.assertEqual(packet.serialize(), self.p0.decode("hex"))
+
+        # Test regular nested packet
+        packet = AnotherPacket()
+        packet.header = 0xD0
+        packet.timestamp = 0x12345678
+        packet.origin.x = 1
+        packet.origin.y = 1
+        packet.data.append(PointStruct(x=2, y=2))
+        self.assertEqual(packet.serialize(), self.p1.decode("hex"))
 
     def test_nested_packet_deserialize(self):
         packet = ArrayPacket()
-        packet.deserialize(self.p.decode("hex"))
+        packet.deserialize(self.p0.decode("hex"))
         self.assertEqual(packet.header, 0xF1)
         self.assertEqual(
             list(packet.data),
@@ -254,6 +301,31 @@ class NestedPacketTester(unittest.TestCase):
                 PointStruct(x=3, y=0)
             ]
         )
+
+        # Test rgular nested packet
+        packet = AnotherPacket()
+        packet.deserialize(self.p1.decode("hex"))
+        self.assertEqual(packet.header, 0xD0)
+        self.assertEqual(packet.timestamp, 0x12345678)
+        self.assertEqual(packet.origin, PointStruct(x=1, y=1))
+        self.assertEqual(packet.points, 1)
+        self.assertEqual(
+            list(packet.data),
+            [PointStruct(x=2, y=2)]
+        )
+
+    def test_nested_packet_assign(self):
+        packet = AnotherPacket()
+        try:
+            packet.origin = PointStruct(x=1, y=1)
+        except ValueError as err:
+            self.fail(
+                "Assigning PointStruct to packet.origin failed: {}".format(
+                    err.message
+                )
+            )
+        with self.assertRaises(ValueError):
+            packet.origin = AnotherPacket()
 
 
 class InvalidInputTester(unittest.TestCase):

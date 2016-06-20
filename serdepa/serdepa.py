@@ -19,7 +19,10 @@ def add_property(cls, attr, attr_type):
         pass
     else:
 
-        if isinstance(attr_type, BaseIterable) or isinstance(attr_type, ByteString):
+        if (
+                isinstance(attr_type, BaseIterable) or
+                isinstance(attr_type, ByteString)
+            ):
             setter = None
 
             def getter(self):
@@ -34,6 +37,23 @@ def add_property(cls, attr, attr_type):
                     '_field_registry'
                 )[getattr(self, '_depends')[attr]])
 
+        elif isinstance(attr_type, SuperSerdepaPacket):
+            def setter(self, v):
+                if isinstance(v, self._fields[attr][0]):
+                   setattr(self, '_%s' % attr, v)
+                else:
+                    raise ValueError(
+                        "Cannot assign a value of type {} "
+                        "to field {} of type {}".format(
+                            v.__class__.__name__,
+                            attr,
+                            getattr(self, '_%s' % attr).__class__.__name__
+                        )
+                    )
+
+            def getter(self):
+                return getattr(self, '_%s' % attr)
+
         else:
             def setter(self, v):
                 setattr(getattr(self, '_%s' % attr), "value", v)
@@ -47,9 +67,10 @@ def add_property(cls, attr, attr_type):
 class SuperSerdepaPacket(type):
     """
     Metaclass of the SerdepaPacket object. Essentially does the following:
-        Reads the _fields_ attribute of the class and for each 2- or 3-tuple entry
-        sets up the properties of the class to the right names. Also checks that each
-        (non-last) List instance has a Length field associated with it.
+        Reads the _fields_ attribute of the class and for each 2- or
+        3-tuple entry sets up the properties of the class to the right
+        names. Also checks that each (non-last) List instance has a
+        Length field associated with it.
     """
 
     def __init__(cls, what, bases=None, attrs=None):
@@ -62,15 +83,25 @@ class SuperSerdepaPacket(type):
                     if len(field) == 2:
                         default = None
                     elif isinstance(field[1], Length):
-                        raise TypeError("A Length field can't have a default value: {}".format(field))
+                        raise TypeError(
+                            "A Length field can't have a default value: {}".format(
+                                field
+                            )
+                        )
                     else:
                         default = field[2]
                     add_property(cls, field[0], field[1])
                     getattr(cls, "_fields")[field[0]] = [field[1], default]
                     if isinstance(field[1], Length):
                         getattr(cls, "_depends")[field[0]] = field[1]._field
-                    elif isinstance(field[1], List) or isinstance(field[1], ByteString):
-                        if not (field[0] in getattr(cls, "_depends").values() or field == attrs['_fields_'][-1]):
+                    elif (
+                            isinstance(field[1], List) or
+                            isinstance(field[1], ByteString)
+                        ):
+                        if not (
+                                field[0] in getattr(cls, "_depends").values() or
+                                field == attrs['_fields_'][-1]
+                            ):
                             raise TypeError("Only the last field can have an undefined length ({} of type {})".format(
                                 field[0],
                                 type(field[1])
