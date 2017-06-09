@@ -10,7 +10,8 @@ import math
 __author__ = "Raido Pahtma, Kaarel Ratas"
 __license__ = "MIT"
 
-version = '0.2.3'
+version = '0.2.4'
+
 
 def add_property(cls, attr, attr_type):
     if hasattr(cls, attr):
@@ -19,10 +20,7 @@ def add_property(cls, attr, attr_type):
         pass
     else:
 
-        if (
-                isinstance(attr_type, BaseIterable) or
-                isinstance(attr_type, ByteString)
-            ):
+        if (isinstance(attr_type, BaseIterable) or isinstance(attr_type, ByteString)):
             setter = None
 
             def getter(self):
@@ -40,8 +38,8 @@ def add_property(cls, attr, attr_type):
         elif isinstance(attr_type, SuperSerdepaPacket):
             def setter(self, v):
                 if isinstance(v, self._fields[attr][0]):
-                   setattr(self, '_%s' % attr, v)
-                   self._field_registry[attr] = v
+                    setattr(self, '_%s' % attr, v)
+                    self._field_registry[attr] = v
                 else:
                     raise ValueError(
                         "Cannot assign a value of type {} "
@@ -95,14 +93,8 @@ class SuperSerdepaPacket(type):
                     getattr(cls, "_fields")[field[0]] = [field[1], default]
                     if isinstance(field[1], Length):
                         getattr(cls, "_depends")[field[0]] = field[1]._field
-                    elif (
-                            isinstance(field[1], List) or
-                            isinstance(field[1], ByteString)
-                        ):
-                        if not (
-                                field[0] in getattr(cls, "_depends").values() or
-                                field == attrs['_fields_'][-1]
-                            ):
+                    elif (isinstance(field[1], List) or isinstance(field[1], ByteString)):
+                        if not (field[0] in getattr(cls, "_depends").values() or field == attrs['_fields_'][-1]):
                             raise TypeError("Only the last field can have an undefined length ({} of type {})".format(
                                 field[0],
                                 type(field[1])
@@ -130,7 +122,6 @@ class SerdepaPacket(object):
     and the class method
     .minimal_size() -> int
     """
-
 
     __metaclass__ = SuperSerdepaPacket
 
@@ -208,7 +199,7 @@ class BaseField(object):
 
 #    def __call__(self):
 #        return NotImplemented
-#    
+#
     def serialize(self):
         return bytearray([])
 
@@ -388,7 +379,7 @@ class Array(BaseIterable):
         self._type = object_type
         self._length = length
         super(Array, self).__init__(**kwargs)
-        
+
     @property
     def length(self):
         return self._length
@@ -443,7 +434,7 @@ class ByteString(BaseField):
     @property
     def _value(self):
         return reduce(
-            lambda x, (i, y): x + (y << (8*i)),
+            lambda x, v: x + (v[1] << (8*v[0])),
             enumerate(
                 reversed(list(self._data_container))
             ),
@@ -547,22 +538,22 @@ class int32(BaseInt):
 class nx_uint64(BaseInt):
     _signed = False
     _length = 64
-    _format = ">L"
+    _format = ">Q"
 
 
 class nx_int64(BaseInt):
     _signed = True
     _length = 64
-    _format = ">l"
+    _format = ">q"
 
 
 class uint64(BaseInt):
     _signed = False
     _length = 64
-    _format = "<L"
+    _format = "<Q"
 
 
 class int64(BaseInt):
     _signed = True
     _length = 64
-    _format = "<l"
+    _format = "<q"
