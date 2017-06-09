@@ -443,7 +443,7 @@ class ByteString(BaseField):
     @property
     def _value(self):
         return reduce(
-            lambda x, (i, y): x + (y << (8*i)),
+            lambda x, v: x + (v[1] << (8*v[0])),
             enumerate(
                 reversed(list(self._data_container))
             ),
