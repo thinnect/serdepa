@@ -10,7 +10,7 @@ import math
 __author__ = "Raido Pahtma, Kaarel Ratas"
 __license__ = "MIT"
 
-version = '0.2.3'
+version = '0.2.4'
 
 
 def add_property(cls, attr, attr_type):
@@ -538,22 +538,22 @@ class int32(BaseInt):
 class nx_uint64(BaseInt):
     _signed = False
     _length = 64
-    _format = ">L"
+    _format = ">Q"
 
 
 class nx_int64(BaseInt):
     _signed = True
     _length = 64
-    _format = ">l"
+    _format = ">q"
 
 
 class uint64(BaseInt):
     _signed = False
     _length = 64
-    _format = "<L"
+    _format = "<Q"
 
 
 class int64(BaseInt):
     _signed = True
     _length = 64
-    _format = "<l"
+    _format = "<q"
