@@ -1,6 +1,14 @@
-"""serdepa.py: Binary packet serialization and deserialization library. """
+"""
+serdepa.py: Binary packet serialization and deserialization library.
+"""
 
-import StringIO
+from __future__ import unicode_literals
+
+from functools import reduce
+try:
+    import StringIO
+except ImportError:
+    import io as StringIO
 import struct
 import collections
 import warnings
@@ -10,7 +18,7 @@ import math
 __author__ = "Raido Pahtma, Kaarel Ratas"
 __license__ = "MIT"
 
-version = '0.2.4'
+version = '0.2.5'
 
 
 def add_property(cls, attr, attr_type):
@@ -20,7 +28,7 @@ def add_property(cls, attr, attr_type):
         pass
     else:
 
-        if (isinstance(attr_type, BaseIterable) or isinstance(attr_type, ByteString)):
+        if isinstance(attr_type, BaseIterable) or isinstance(attr_type, ByteString):
             setter = None
 
             def getter(self):
@@ -93,7 +101,7 @@ class SuperSerdepaPacket(type):
                     getattr(cls, "_fields")[field[0]] = [field[1], default]
                     if isinstance(field[1], Length):
                         getattr(cls, "_depends")[field[0]] = field[1]._field
-                    elif (isinstance(field[1], List) or isinstance(field[1], ByteString)):
+                    elif isinstance(field[1], List) or isinstance(field[1], ByteString):
                         if not (field[0] in getattr(cls, "_depends").values() or field == attrs['_fields_'][-1]):
                             raise TypeError("Only the last field can have an undefined length ({} of type {})".format(
                                 field[0],
@@ -127,7 +135,7 @@ class SerdepaPacket(object):
 
     def __init__(self, **kwargs):
         self._field_registry = collections.OrderedDict()
-        for name, (_type, default) in self._fields.iteritems():
+        for name, (_type, default) in self._fields.items():
             if name in kwargs:
                 self._field_registry[name] = _type(initial=copy.copy(kwargs[name]))
             elif default:
@@ -138,7 +146,7 @@ class SerdepaPacket(object):
 
     def serialize(self):
         serialized = StringIO.StringIO()
-        for name, field in self._field_registry.iteritems():
+        for name, field in self._field_registry.items():
             if name in self._depends:
                 serialized.write(
                     field.serialize(self._field_registry[self._depends[name]].length)
@@ -150,7 +158,7 @@ class SerdepaPacket(object):
         return ret
 
     def deserialize(self, data, pos=0):
-        for i, (name, field) in enumerate(self._field_registry.iteritems()):
+        for i, (name, field) in enumerate(self._field_registry.items()):
             if pos >= len(data):
                 if i == len(self._field_registry) - 1 and (isinstance(field, List) or isinstance(field, ByteString)):
                     return pos
@@ -159,7 +167,7 @@ class SerdepaPacket(object):
             try:
                 pos = field.deserialize(data, pos)
             except AttributeError:
-                for key, value in self._depends.iteritems():
+                for key, value in self._depends.items():
                     if name == value:
                         pos = field.deserialize(data, pos, self._field_registry[key]._type.value)
                         break
@@ -171,14 +179,14 @@ class SerdepaPacket(object):
 
     def serialized_size(self):
         size = 0
-        for name, field in self._field_registry.iteritems():
+        for name, field in self._field_registry.items():
             size += field.serialized_size()
         return size
 
     @classmethod
     def minimal_size(cls):
         size = 0
-        for name, (_type, default) in cls._fields.iteritems():
+        for name, (_type, default) in cls._fields.items():
             size += _type.minimal_size()
         return size
 
@@ -233,18 +241,18 @@ class BaseIterable(BaseField, list):
 
     def serialize(self):
         ret = bytearray()
-        for i in xrange(self.length):
+        for i in range(self.length):
             ret += self[i].serialize()
         return ret
 
     def deserialize(self, value, pos):
-        for i in xrange(self.length):
+        for i in range(self.length):
             self[i] = self._type()
             pos = self[i].deserialize(value, pos)
         return pos
 
     def __iter__(self):
-        for i in xrange(len(self)):
+        for i in range(len(self)):
             try:
                 yield self[i].value
             except AttributeError:
@@ -295,9 +303,9 @@ class BaseInt(BaseField):
 
     def __getattribute__(self, attr):
         if attr in ["__lt__", "__le__", "__eq__", "__ne__", "__gt__", "__ge__",
-                "__add__", "__sub__", "__mul__", "__floordiv__", "__mod__",
-                "__divmod__", "__pow__", "__lshift__", "__rshift__", "__and__",
-                "__xor__", "__or__", "__div__", "__truediv__", "__str__"]:
+                    "__add__", "__sub__", "__mul__", "__floordiv__", "__mod__",
+                    "__divmod__", "__pow__", "__lshift__", "__rshift__", "__and__",
+                    "__xor__", "__or__", "__div__", "__truediv__", "__str__"]:
             return self._value.__getattribute__(attr)
         else:
             return super(BaseInt, self).__getattribute__(attr)
@@ -357,12 +365,12 @@ class List(BaseIterable):
             raise AttributeError("Unknown length.")
         elif length == -1:
             del self[:]     # clear the internal list - deserialization will overwrite anyway.
-            for i in xrange(len(self), (len(value)-pos)/self._type().serialized_size()):
+            for i in range(len(self), (len(value)-pos)/self._type().serialized_size()):
                 self.append(0)
             return super(List, self).deserialize(value, pos)
         else:
             del self[:]     # clear the internal list - deserialization will overwrite anyway.
-            for i in xrange(len(self), length):
+            for i in range(len(self), length):
                 self.append(0)
             return super(List, self).deserialize(value, pos)
 
@@ -392,14 +400,14 @@ class Array(BaseIterable):
         if dl < 0:
             warnings.warn(RuntimeWarning("The number of items in the Array exceeds the length of the array."))
         elif dl > 0:
-            self += [self._type() for _ in xrange(dl)]  # TODO is this correct???
+            self += [self._type() for _ in range(dl)]  # TODO is this correct???
         ret = super(Array, self).serialize()
-        for i in xrange(dl):
+        for i in range(dl):
             self.pop(-1)
         return ret
 
     def deserialize(self, value, pos):
-        for i in xrange(len(self), self.length):
+        for i in range(len(self), self.length):
             self.append(self._type())
         return super(Array, self).deserialize(value, pos)
 
