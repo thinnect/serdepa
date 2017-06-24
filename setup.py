@@ -10,6 +10,7 @@ setup(name='serdepa',
       author_email='github@thinnect.com',
       license='MIT',
       packages=['serdepa'],
+      install_requires=['six'],
       test_suite='nose.collector',
       tests_require=['nose'],
       zip_safe=False)

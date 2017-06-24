@@ -5,20 +5,19 @@ serdepa.py: Binary packet serialization and deserialization library.
 from __future__ import unicode_literals
 
 from functools import reduce
-try:
-    import StringIO
-except ImportError:
-    import io as StringIO
 import struct
 import collections
 import warnings
 import copy
 import math
+from codecs import encode
+
+from six import add_metaclass, BytesIO
 
 __author__ = "Raido Pahtma, Kaarel Ratas"
 __license__ = "MIT"
 
-version = '0.2.5'
+version = '0.2.6.dev0'
 
 
 def add_property(cls, attr, attr_type):
@@ -113,6 +112,7 @@ class SuperSerdepaPacket(type):
         super(SuperSerdepaPacket, cls).__init__(what, bases, attrs)
 
 
+@add_metaclass(SuperSerdepaPacket)
 class SerdepaPacket(object):
     """
     The superclass for any packets. Defining a subclass works as such:
@@ -131,8 +131,6 @@ class SerdepaPacket(object):
     .minimal_size() -> int
     """
 
-    __metaclass__ = SuperSerdepaPacket
-
     def __init__(self, **kwargs):
         self._field_registry = collections.OrderedDict()
         for name, (_type, default) in self._fields.items():
@@ -145,7 +143,7 @@ class SerdepaPacket(object):
             setattr(self, '_%s' % name, self._field_registry[name])
 
     def serialize(self):
-        serialized = StringIO.StringIO()
+        serialized = BytesIO()
         for name, field in self._field_registry.items():
             if name in self._depends:
                 serialized.write(
@@ -191,7 +189,7 @@ class SerdepaPacket(object):
         return size
 
     def __str__(self):
-        return self.serialize().encode("hex").upper()
+        return encode(self.serialize(), "hex").decode().upper()
 
     def __eq__(self, other):
         return str(self) == str(other)
@@ -365,7 +363,7 @@ class List(BaseIterable):
             raise AttributeError("Unknown length.")
         elif length == -1:
             del self[:]     # clear the internal list - deserialization will overwrite anyway.
-            for i in range(len(self), (len(value)-pos)/self._type().serialized_size()):
+            for i in range(len(self), (len(value)-pos)//self._type().serialized_size()):
                 self.append(0)
             return super(List, self).deserialize(value, pos)
         else:

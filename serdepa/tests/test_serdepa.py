@@ -1,6 +1,7 @@
 """test_serdepa.py: Tests for serdepa packets. """
 
 import unittest
+from codecs import decode, encode
 
 from serdepa import SerdepaPacket, Length, List, Array, \
         nx_uint8, nx_uint16, nx_uint32, nx_uint64, \
@@ -110,11 +111,11 @@ class TransformTester(unittest.TestCase):
         p.tail.append(5)
         p.tail.append(6)
 
-        self.assertEqual(p.serialize(), self.p1.decode("hex"))
+        self.assertEqual(p.serialize(), decode(self.p1, "hex"))
 
     def test_two(self):
         p = OnePacket()
-        p.deserialize(self.p1.decode("hex"))
+        p.deserialize(decode(self.p1, "hex"))
 
         self.assertEqual(p.header, 1)
         self.assertEqual(p.timestamp, 12345)
@@ -130,7 +131,7 @@ class EmptyTailTester(unittest.TestCase):
 
     def test_empty_tail_deserialize(self):
         p = OnePacket()
-        p.deserialize(self.p1.decode("hex"))
+        p.deserialize(decode(self.p1, "hex"))
 
         self.assertEqual(p.header, 1)
         self.assertEqual(p.timestamp, 12345)
@@ -147,7 +148,7 @@ class EmptyTailTester(unittest.TestCase):
         p.data.append(3)
         p.data.append(4)
 
-        self.assertEqual(p.serialize(), self.p1.decode("hex"))
+        self.assertEqual(p.serialize(), decode(self.p1, "hex"))
 
 
 class DefaultValueTester(unittest.TestCase):
@@ -156,11 +157,11 @@ class DefaultValueTester(unittest.TestCase):
 
     def test_default_value_serialize(self):
         p = DefaultValuePacket()
-        self.assertEqual(p.serialize(), self.p1.decode("hex"))
+        self.assertEqual(p.serialize(), decode(self.p1, "hex"))
 
     def test_default_keyword(self):
         p = DefaultValuePacket(header=2)
-        self.assertEqual(p.serialize(), self.p2.decode("hex"))
+        self.assertEqual(p.serialize(), decode(self.p2, "hex"))
 
 
 class ArrayTester(unittest.TestCase):
@@ -171,7 +172,7 @@ class ArrayTester(unittest.TestCase):
         p = SimpleArray()
         for i in range(10):
             p.data.append(i)
-        self.assertEqual(p.serialize(), self.a1.decode("hex"))
+        self.assertEqual(p.serialize(), decode(self.a1, "hex"))
 
     def test_single_array(self):
         p = ArrayPacket()
@@ -180,11 +181,11 @@ class ArrayTester(unittest.TestCase):
         p.data.append(PointStruct(x=3, y=4))
         p.data.append(PointStruct(x=5, y=6))
 
-        self.assertEqual(p.serialize(), self.a2.decode("hex"))
+        self.assertEqual(p.serialize(), decode(self.a2, "hex"))
 
     def test_single_array_deserialize(self):
         p = ArrayPacket()
-        p.deserialize(self.a2.decode("hex"))
+        p.deserialize(decode(self.a2, "hex"))
 
         self.assertEqual(p.header, 0)
         self.assertEqual(len(p.data), 4)
@@ -222,7 +223,7 @@ class TestHourlyReport(unittest.TestCase):
 
     def test_hourly_deserialize(self):
         r = BeatRecord()
-        r.deserialize(self.report.decode("hex"))
+        r.deserialize(decode(self.report, "hex"))
 
         self.assertEqual(r.nodes_in_beat, 7)
         self.assertEqual(r.beats_in_cycle, 13)
@@ -258,7 +259,7 @@ class StringTester(unittest.TestCase):
 
     def test_str(self):
         r = BeatRecord()
-        r.deserialize(self.report.decode("hex"))
+        r.deserialize(decode(self.report, "hex"))
 
         self.assertEqual(self.report, str(r))
 
@@ -302,7 +303,7 @@ class NestedPacketTester(unittest.TestCase):
         packet.header = 0xF1
         for i, j in zip(range(4), reversed(range(4))):
             packet.data.append(PointStruct(x=i, y=j))
-        self.assertEqual(packet.serialize(), self.p0.decode("hex"))
+        self.assertEqual(packet.serialize(), decode(self.p0, "hex"))
 
         # Test regular nested packet
         packet = AnotherPacket()
@@ -311,11 +312,11 @@ class NestedPacketTester(unittest.TestCase):
         packet.origin.x = 1
         packet.origin.y = 1
         packet.data.append(PointStruct(x=2, y=2))
-        self.assertEqual(packet.serialize(), self.p1.decode("hex"))
+        self.assertEqual(packet.serialize(), decode(self.p1, "hex"))
 
     def test_nested_packet_deserialize(self):
         packet = ArrayPacket()
-        packet.deserialize(self.p0.decode("hex"))
+        packet.deserialize(decode(self.p0, "hex"))
         self.assertEqual(packet.header, 0xF1)
         self.assertEqual(
             list(packet.data),
@@ -329,7 +330,7 @@ class NestedPacketTester(unittest.TestCase):
 
         # Test rgular nested packet
         packet = AnotherPacket()
-        packet.deserialize(self.p1.decode("hex"))
+        packet.deserialize(decode(self.p1, "hex"))
         self.assertEqual(packet.header, 0xD0)
         self.assertEqual(packet.timestamp, 0x12345678)
         self.assertEqual(packet.origin, PointStruct(x=1, y=1))
@@ -346,7 +347,7 @@ class NestedPacketTester(unittest.TestCase):
         except ValueError as err:
             self.fail(
                 "Assigning PointStruct to packet.origin failed: {}".format(
-                    err.message
+                    err.args[0] if err.args else "<NO MESSAGE>"
                 )
             )
         with self.assertRaises(ValueError):
@@ -358,7 +359,10 @@ class NestedPacketTester(unittest.TestCase):
         packet.timestamp = 0x12345678
         packet.origin = PointStruct(x=1, y=1)
         packet.data.append(PointStruct(x=2, y=2))
-        self.assertEqual(packet.serialize().encode("hex").upper(), self.p1)
+        self.assertEqual(
+            encode(packet.serialize(), "hex").decode().upper(),
+            self.p1
+        )
 
 
 class InvalidInputTester(unittest.TestCase):
@@ -386,7 +390,7 @@ class InvalidInputTester(unittest.TestCase):
     def test_invalid_length_input(self):
         r = BeatRecord()
         with self.assertRaises(ValueError):
-            r.deserialize(self.p.decode("hex"))
+            r.deserialize(decode(self.p, "hex"))
 
 
 class ByteStringTester(unittest.TestCase):
@@ -401,13 +405,13 @@ class ByteStringTester(unittest.TestCase):
             )
         packet = VarLenPacket()
         try:
-            packet.deserialize(self.p1.decode("hex"))
+            packet.deserialize(decode(self.p1, "hex"))
         except ValueError as e:
             self.fail("Variable length ByteString deserializing failed with message: {}".format(e))
         self.assertTrue(isinstance(packet.tail, ByteString))
         self.assertEqual(packet.hdr, 0xF10E)
         self.assertEqual(packet.tail, 0x323511122213541513A2D21F161C3621B8)
-        self.assertEqual(packet.serialize(), self.p1.decode("hex"))
+        self.assertEqual(packet.serialize(), decode(self.p1, "hex"))
 
     def test_fixed_length_bytestring(self):
         class FixLenPacket(SerdepaPacket):
@@ -416,10 +420,10 @@ class ByteStringTester(unittest.TestCase):
                 ('tail', ByteString(6))
             )
         packet = FixLenPacket()
-        packet.deserialize(self.p2.decode("hex"))
+        packet.deserialize(decode(self.p2, "hex"))
         self.assertEqual(packet.hdr, 0x03)
         self.assertEqual(packet.tail, 0x05E8F02398A9)
-        self.assertEqual(packet.serialize(), self.p2.decode("hex"))
+        self.assertEqual(packet.serialize(), decode(self.p2, "hex"))
 
     def test_length_object_defined_length_bytestring(self):
         class LenObjLenPacket(SerdepaPacket):
@@ -429,7 +433,7 @@ class ByteStringTester(unittest.TestCase):
                 ('tail', ByteString())
             )
         packet = LenObjLenPacket()
-        packet.deserialize(self.p2.decode("hex"))
+        packet.deserialize(decode(self.p2, "hex"))
         self.assertEqual(packet.hdr, 0x03)
         self.assertEqual(packet.length, 5)
         self.assertEqual(packet.tail, 0xE8F02398A9)
