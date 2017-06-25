@@ -3,10 +3,13 @@
 import unittest
 from codecs import decode, encode
 
-from serdepa import SerdepaPacket, Length, List, Array, \
-        nx_uint8, nx_uint16, nx_uint32, nx_uint64, \
-        nx_int8, nx_int16, nx_int32, nx_int64, \
-        uint8, uint16, uint32, uint64, ByteString
+from serdepa import (
+    SerdepaPacket, Length, List, Array, ByteString,
+    nx_uint8, nx_uint16, nx_uint32, nx_uint64,
+    nx_int8, nx_int16, nx_int32, nx_int64,
+    uint8, uint16, uint32, uint64,
+    int8, int16, int32, int64
+)
 
 
 __author__ = "Raido Pahtma, Kaarel Ratas"
@@ -438,6 +441,58 @@ class ByteStringTester(unittest.TestCase):
         self.assertEqual(packet.length, 5)
         self.assertEqual(packet.tail, 0xE8F02398A9)
         self.assertEqual(str(packet.tail), 'E8F02398A9')
+
+
+class BigTypeTester(unittest.TestCase):
+    p1 = '11FF00FF00FF00FF00'
+
+    def test_nx_uint64(self):
+        class Packet(SerdepaPacket):
+            _fields_ = (
+                ('header', nx_uint8),
+                ('guid', nx_uint64)
+            )
+
+        packet = Packet()
+        packet.deserialize(decode(self.p1, "hex"))
+        self.assertEqual(packet.header, 0x11)
+        self.assertEqual(packet.guid, 0xFF00FF00FF00FF00)
+
+    def test_nx_int64(self):
+        class Packet(SerdepaPacket):
+            _fields_ = (
+                ('header', nx_uint8),
+                ('guid', nx_int64)
+            )
+
+        packet = Packet()
+        packet.deserialize(decode(self.p1, "hex"))
+        self.assertEqual(packet.header, 0x11)
+        self.assertEqual(packet.guid, 0-0x00FF00FF00FF00FF-1)
+
+    def test_uint64(self):
+        class Packet(SerdepaPacket):
+            _fields_ = (
+                ('header', nx_uint8),
+                ('guid', uint64)
+            )
+
+        packet = Packet()
+        packet.deserialize(decode(self.p1, "hex"))
+        self.assertEqual(packet.header, 0x11)
+        self.assertEqual(packet.guid, 0x00FF00FF00FF00FF)
+
+    def test_int64(self):
+        class Packet(SerdepaPacket):
+            _fields_ = (
+                ('header', nx_uint8),
+                ('guid', int64)
+            )
+
+        packet = Packet()
+        packet.deserialize(decode(self.p1, "hex"))
+        self.assertEqual(packet.header, 0x11)
+        self.assertEqual(packet.guid, 0x00FF00FF00FF00FF)
 
 
 if __name__ == '__main__':
