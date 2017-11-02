@@ -152,13 +152,16 @@ class SerdepaPacket(object):
 
     def __init__(self, **kwargs):
         self._field_registry = collections.OrderedDict()
-        for name, (_type, default) in self._fields.items():
+        for name, (type_, default) in self._fields.items():
             if name in kwargs:
-                self._field_registry[name] = _type(initial=copy.copy(kwargs[name]))
+                if issubclass(type_, SerdepaPacket):
+                    self._field_registry[name] = copy.copy(kwargs[name])
+                else:
+                    self._field_registry[name] = type_(initial=copy.copy(kwargs[name]))
             elif default:
-                self._field_registry[name] = _type(initial=copy.copy(default))
+                self._field_registry[name] = type_(initial=copy.copy(default))
             else:
-                self._field_registry[name] = _type()
+                self._field_registry[name] = type_()
             setattr(self, '_%s' % name, self._field_registry[name])
 
     def serialize(self):

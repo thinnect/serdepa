@@ -495,5 +495,45 @@ class BigTypeTester(unittest.TestCase):
         self.assertEqual(packet.guid, 0x00FF00FF00FF00FF)
 
 
+class SubstructTester(unittest.TestCase):
+    input = decode(
+        "010203",
+        "hex"
+    )
+
+    def setUp(self):
+        class Inner(SerdepaPacket):
+            _fields_ = (
+                ('first', nx_uint8, 0),
+                ('second', nx_uint8),
+            )
+
+        class Outer(SerdepaPacket):
+            _fields_ = (
+                ('inner', Inner),
+                ('tail', nx_uint8),
+            )
+        self.Inner = Inner
+        self.Outer = Outer
+        self.packet = Outer()
+        self.inner = Inner()
+
+    def test_substruct_deserialize(self):
+        self.packet.deserialize(self.input)
+        self.assertEqual(self.packet.inner.first, 1)
+        self.assertEqual(self.packet.inner.second, 2)
+        self.assertEqual(self.packet.tail, 3)
+
+    def test_substruct_serialize(self):
+        self.packet.inner.first = 1
+        self.packet.inner.second = 2
+        self.packet.tail = 3
+        self.assertEqual(self.packet.serialize(), self.input)
+
+    def test_default_inner_initialization(self):
+        self.packet = self.Outer(inner=self.Inner(first=1, second=2), tail=3)
+        self.assertEqual(self.packet.serialize(), self.input)
+
+
 if __name__ == '__main__':
     unittest.main()
