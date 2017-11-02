@@ -14,10 +14,11 @@ from codecs import encode
 
 from six import add_metaclass, BytesIO
 
+from .exceptions import PacketDefinitionError, DeserializeError, SerializeError
+
+
 __author__ = "Raido Pahtma, Kaarel Ratas"
 __license__ = "MIT"
-
-version = '0.2.6.dev0'
 
 
 def add_property(cls, attr, attr_type):
@@ -89,25 +90,43 @@ class SuperSerdepaPacket(type):
                     if len(field) == 2:
                         default = None
                     elif isinstance(field[1], Length):
-                        raise TypeError(
+                        raise PacketDefinitionError(
                             "A Length field can't have a default value: {}".format(
                                 field
                             )
                         )
                     else:
                         default = field[2]
-                    add_property(cls, field[0], field[1])
-                    getattr(cls, "_fields")[field[0]] = [field[1], default]
-                    if isinstance(field[1], Length):
-                        getattr(cls, "_depends")[field[0]] = field[1]._field
-                    elif isinstance(field[1], List) or isinstance(field[1], ByteString):
-                        if not (field[0] in getattr(cls, "_depends").values() or field == attrs['_fields_'][-1]):
-                            raise TypeError("Only the last field can have an undefined length ({} of type {})".format(
-                                field[0],
-                                type(field[1])
-                            ))
+                    name, value = field[0], field[1]
+                    add_property(cls, name, value)
+                    if name in getattr(cls, "_fields"):
+                        raise PacketDefinitionError(
+                            "The field {} appears more than once in {}.".format(
+                                name, cls.__name__
+                            )
+                        )
+                    getattr(cls, "_fields")[name] = [value, default]
+                    if not (
+                                isinstance(value, (SerdepaPacket, BaseField)) or
+                                issubclass(value, (SerdepaPacket, BaseField))
+                    ):
+                        raise PacketDefinitionError(
+                            "Invalid type {} of field {} in {}".format(
+                                value.__name__, name, cls.__name__
+                            )
+                        )
+                    elif isinstance(value, Length):
+                        getattr(cls, "_depends")[name] = value._field
+                    elif isinstance(value, (List, ByteString)):
+                        if not (name in getattr(cls, "_depends").values() or field == attrs['_fields_'][-1]):
+                            raise PacketDefinitionError(
+                                "Only the last field can have an undefined length ({} of type {})".format(
+                                    name,
+                                    type(value)
+                                )
+                            )
                 else:
-                    raise TypeError("A field needs both a name and a type: {}".format(field))
+                    raise PacketDefinitionError("A field needs both a name and a type: {}".format(field))
 
         super(SuperSerdepaPacket, cls).__init__(what, bases, attrs)
 
