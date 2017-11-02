@@ -10,6 +10,7 @@ from serdepa import (
     uint8, uint16, uint32, uint64,
     int8, int16, int32, int64
 )
+from serdepa.exceptions import DeserializeError
 
 
 __author__ = "Raido Pahtma, Kaarel Ratas"
@@ -392,7 +393,7 @@ class InvalidInputTester(unittest.TestCase):
 
     def test_invalid_length_input(self):
         r = BeatRecord()
-        with self.assertRaises(ValueError):
+        with self.assertRaises(DeserializeError):
             r.deserialize(decode(self.p, "hex"))
 
 
@@ -409,7 +410,7 @@ class ByteStringTester(unittest.TestCase):
         packet = VarLenPacket()
         try:
             packet.deserialize(decode(self.p1, "hex"))
-        except ValueError as e:
+        except DeserializeError as e:
             self.fail("Variable length ByteString deserializing failed with message: {}".format(e))
         self.assertTrue(isinstance(packet.tail, ByteString))
         self.assertEqual(packet.hdr, 0xF10E)
@@ -533,6 +534,31 @@ class SubstructTester(unittest.TestCase):
     def test_default_inner_initialization(self):
         self.packet = self.Outer(inner=self.Inner(first=1, second=2), tail=3)
         self.assertEqual(self.packet.serialize(), self.input)
+
+
+class InvalidLengthTester(unittest.TestCase):
+    short_input = decode(
+        "0001020304050607",
+        "hex"
+    )
+    long_input = decode(
+        "000102030405060708090A0B0C0D0E0F",
+        "hex"
+    )
+
+    class TestPacket(SerdepaPacket):
+        _fields_ = (
+            ('header', nx_uint32),
+            ('length', nx_uint8),
+            ('values', nx_uint8)
+        )
+
+    def test_deserialize(self):
+        packet = self.TestPacket()
+        with self.assertRaises(DeserializeError):
+            packet.deserialize(self.short_input)
+        with self.assertRaises(DeserializeError):
+            packet.deserialize(self.long_input)
 
 
 if __name__ == '__main__':

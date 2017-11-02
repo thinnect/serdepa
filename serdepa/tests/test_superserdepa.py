@@ -73,3 +73,17 @@ class FieldsTester(unittest.TestCase):
             _fields_ = (
                 ('testfield', List(nx_int8)),
             )
+
+    def test_existing_property(self):
+        with self.assertRaises(PacketDefinitionError):
+            class TestPacket(SerdepaPacket):
+                _fields_ = (
+                    ('testfield', nx_int8),
+                    ('testfield2', nx_uint8),
+                )
+                testfield2 = 1
+        class TestPacket(SerdepaPacket):
+            _fields_ = (
+                ('testfield', nx_int8),
+                ('testfield2', nx_uint8),
+            )

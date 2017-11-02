@@ -23,9 +23,9 @@ __license__ = "MIT"
 
 def add_property(cls, attr, attr_type):
     if hasattr(cls, attr):
-        # print "NOT adding property %s to %s" % (attr, cls)
-        # In the final version this should probably raise an exception once everything is handled properly
-        pass
+        raise PacketDefinitionError(
+            "Attribute {} already exists on {}.".format(attr, cls.__name__)
+        )
     else:
 
         if isinstance(attr_type, BaseIterable) or isinstance(attr_type, ByteString):
@@ -177,24 +177,28 @@ class SerdepaPacket(object):
         serialized.close()
         return ret
 
-    def deserialize(self, data, pos=0):
+    def deserialize(self, data, pos=0, final=True):
         for i, (name, field) in enumerate(self._field_registry.items()):
             if pos >= len(data):
-                if i == len(self._field_registry) - 1 and (isinstance(field, List) or isinstance(field, ByteString)):
-                    return pos
+                if i == len(self._field_registry) - 1 and isinstance(field, (List, ByteString)):
+                    break
                 else:
-                    raise ValueError("Invalid length of data to deserialize.")
+                    raise DeserializeError("Invalid length of data to deserialize.")
             try:
-                pos = field.deserialize(data, pos)
+                pos = field.deserialize(data, pos, False)
             except AttributeError:
                 for key, value in self._depends.items():
                     if name == value:
-                        pos = field.deserialize(data, pos, self._field_registry[key]._type.value)
+                        pos = field.deserialize(data, pos, False, self._field_registry[key]._type.value)
                         break
                 else:
-                    pos = field.deserialize(data, pos, -1)
+                    pos = field.deserialize(data, pos, False, -1)
             if pos > len(data):
-                raise ValueError("Invalid length of data to deserialize. {}, {}".format(pos, len(data)))
+                raise DeserializeError("Invalid length of data to deserialize. {}, {}".format(pos, len(data)))
+        if final and pos != len(data):
+            raise DeserializeError(
+                "After deserialization, {} bytes were left.".format(len(data)-pos+1)
+            )
         return pos
 
     def serialized_size(self):
@@ -231,7 +235,7 @@ class BaseField(object):
     def serialize(self):
         return bytearray([])
 
-    def deserialize(self, value, pos):
+    def deserialize(self, value, pos, final=True):
         raise NotImplementedError()
 
     @classmethod
@@ -265,10 +269,10 @@ class BaseIterable(BaseField, list):
             ret += self[i].serialize()
         return ret
 
-    def deserialize(self, value, pos):
+    def deserialize(self, value, pos, final=True):
         for i in range(self.length):
             self[i] = self._type()
-            pos = self[i].deserialize(value, pos)
+            pos = self[i].deserialize(value, pos, final=final)
         return pos
 
     def __iter__(self):
@@ -305,11 +309,11 @@ class BaseInt(BaseField):
     def serialize(self):
         return struct.pack(self._format, self._value)
 
-    def deserialize(self, value, pos):
+    def deserialize(self, value, pos, final=True):
         try:
             self._value = struct.unpack(self._format, value[pos:pos+self.serialized_size()])[0]
         except struct.error as e:
-            raise ValueError("Invalid length of data!", e)
+            raise DeserializeError("Invalid length of data!", e)
         return pos + self.serialized_size()
 
     @classmethod
@@ -357,8 +361,8 @@ class Length(BaseField):
         self._type.value = length
         return self._type.serialize()
 
-    def deserialize(self, value, pos):
-        return self._type.deserialize(value, pos)
+    def deserialize(self, value, pos, final=True):
+        return self._type.deserialize(value, pos, final=final)
 
     def minimal_size(self):
         return self.serialized_size()
@@ -380,19 +384,19 @@ class List(BaseIterable):
     def serialized_size(self):
         return self._type.serialized_size() * self.length
 
-    def deserialize(self, value, pos, length=None):
+    def deserialize(self, value, pos, final=True, length=None):
         if length is None:
             raise AttributeError("Unknown length.")
         elif length == -1:
             del self[:]     # clear the internal list - deserialization will overwrite anyway.
             for i in range(len(self), (len(value)-pos)//self._type().serialized_size()):
                 self.append(0)
-            return super(List, self).deserialize(value, pos)
+            return super(List, self).deserialize(value, pos, final=final)
         else:
             del self[:]     # clear the internal list - deserialization will overwrite anyway.
             for i in range(len(self), length):
                 self.append(0)
-            return super(List, self).deserialize(value, pos)
+            return super(List, self).deserialize(value, pos, final=final)
 
     def minimal_size(cls):
         return 0
@@ -426,10 +430,10 @@ class Array(BaseIterable):
             self.pop(-1)
         return ret
 
-    def deserialize(self, value, pos):
+    def deserialize(self, value, pos, final=True):
         for i in range(len(self), self.length):
             self.append(self._type())
-        return super(Array, self).deserialize(value, pos)
+        return super(Array, self).deserialize(value, pos, final=final)
 
     def minimal_size(self):
         return self.serialized_size()
