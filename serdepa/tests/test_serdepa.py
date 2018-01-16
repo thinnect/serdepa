@@ -561,5 +561,27 @@ class InvalidLengthTester(unittest.TestCase):
             packet.deserialize(self.long_input)
 
 
+class SubclassIssueTester(unittest.TestCase):
+
+    class ParameterWithId(SerdepaPacket):
+        SOME_PARAMETER = 0x21
+        _fields_ = [
+            ("header", nx_uint8, SOME_PARAMETER),
+            ("idlength", Length(nx_uint8, "id")),
+            ("id", List(nx_uint8))
+        ]
+
+    def test_creation(self):
+        packet = self.ParameterWithId()
+
+    def test_initialization_long(self):
+        packet = self.ParameterWithId()
+        packet.id.extend(map(lambda c: ord(c), "parameter"))
+        self.assertEqual(packet.id, map(lambda c: ord(c), "parameter"))
+
+    def test_initialization_short(self):
+        packet = self.ParameterWithId(id=map(lambda c: ord(c), "parameter"))
+        self.assertEqual(packet.id, map(lambda c: ord(c), "parameter"))
+
 if __name__ == '__main__':
     unittest.main()
