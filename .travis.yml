@@ -1,12 +1,11 @@
 language: python
 python:
   # Python 2
-  - "2.6"
   - "2.7"
   # Python 3
   - "3.5"
   - "3.6"
-  - "3.7"
+  - "3.7-dev"
 install:
   - pip install -r requirements.txt
 script:
