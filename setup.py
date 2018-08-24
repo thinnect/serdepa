@@ -2,7 +2,7 @@ from setuptools import setup
 
 
 setup(name='serdepa',
-      version='0.3.0',
+      version='0.3.1',
       description='Binary packet serialization and deserialization library.',
       url='https://github.com/thinnect/serdepa',
       author='Raido Pahtma, Kaarel Ratas',

@@ -34,6 +34,14 @@ class OnePacket(SerdepaPacket):
     ]
 
 
+class OneTailPacket(SerdepaPacket):
+    _fields_ = [
+        ("header", nx_uint8),
+        ("timestamp", nx_uint32),
+        ("tail", List(nx_uint8))
+    ]
+
+
 class DefaultValuePacket(SerdepaPacket):
     _fields_ = [
         ("header", nx_uint8, 1),
@@ -153,6 +161,45 @@ class EmptyTailTester(unittest.TestCase):
         p.data.append(4)
 
         self.assertEqual(p.serialize(), decode(self.p1, "hex"))
+
+
+class SomeTailTester(unittest.TestCase):
+    p1 = "0100003039"
+    p2 = "010000303901020304"
+
+    def test_empty_tail_deserialize(self):
+        p = OneTailPacket()
+        p.deserialize(decode(self.p1, "hex"))
+
+        self.assertEqual(p.header, 1)
+        self.assertEqual(p.timestamp, 12345)
+        self.assertEqual(list(p.tail), [])
+
+    def test_tail_deserialize(self):
+        p = OneTailPacket()
+        p.deserialize(decode(self.p2, "hex"))
+
+        self.assertEqual(p.header, 1)
+        self.assertEqual(p.timestamp, 12345)
+        self.assertEqual(list(p.tail), [1, 2, 3, 4])
+
+    def test_empty_tail_serialize(self):
+        p = OneTailPacket()
+        p.header = 1
+        p.timestamp = 12345
+
+        self.assertEqual(p.serialize(), decode(self.p1, "hex"))
+
+    def test_tail_serialize(self):
+        p = OneTailPacket()
+        p.header = 1
+        p.timestamp = 12345
+        p.tail.append(1)
+        p.tail.append(2)
+        p.tail.append(3)
+        p.tail.append(4)
+
+        self.assertEqual(p.serialize(), decode(self.p2, "hex"))
 
 
 class DefaultValueTester(unittest.TestCase):
